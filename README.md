@@ -227,3 +227,147 @@ resource "aws_redshift_cluster" "default" {
 
 ```
 
+In order to create a EKS (Elastic Kubernetes Service) in a simple manner, we are going to use a module. The main specs going to be two 16gb ram machines, one focused on memory and the other on processing.
+
+```terraform
+module "eks" {
+  source          = "terraform-aws-modules/eks/aws"
+  version         = "17.24.0"
+  cluster_name    = var.cluster_name
+  cluster_version = "1.21"
+  subnets         = module.vpc.private_subnets
+
+  tags = {
+    Torres = "ETL-AWS"
+  }
+
+  vpc_id = module.vpc.vpc_id
+
+  workers_group_defaults = {
+    root_volume_type = "gp2"
+  }
+
+  worker_groups = [
+    {
+      name                          = "worker-group-1"
+      instance_type                 = "r5.xlarge"
+      asg_desired_capacity          = 1
+      additional_security_group_ids = [aws_security_group.worker_group_mgmt_one.id]
+    },
+    {
+      name                          = "worker-group-2"
+      instance_type                 = "c5.2xlarge"
+      additional_security_group_ids = [aws_security_group.worker_group_mgmt_two.id]
+      asg_desired_capacity          = 1
+    }
+  ]
+}
+
+data "aws_eks_cluster" "cluster" {
+  name = module.eks.cluster_id
+}
+
+data "aws_eks_cluster_auth" "cluster" {
+  name = module.eks.cluster_id
+}
+```
+---
+
+Basically here is creating a bucket that will store all our code and other dependency files of our spark job as pyfiles, and after this creation, it will upload these files.
+
+```terraform
+resource "aws_s3_bucket" "emr_codes_bucket" {
+  bucket        = "emr-code-zone-torres-etl-aws"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket" "athena-results" {
+  bucket        = "athena-results-torres-etl-aws"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_object" "codes_object" {
+  for_each = fileset("../codes/", "*")
+
+  bucket        = aws_s3_bucket.emr_codes_bucket.id
+  key           = each.key
+  source        = "../codes/${each.key}"
+  force_destroy = true
+
+  depends_on = [aws_s3_bucket.emr_codes_bucket]
+}
+```
+---
+
+Here we basically have the creation of a database and a crawler in glue to use in our pipeline, in addition to some policies and roles so we don't have problems with permission levels.
+
+```terraform
+resource "aws_glue_catalog_database" "aws_glue_catalog_database" {
+  name = "torres-database-etl-aws"
+}
+
+resource "aws_iam_role" "glue_role" {
+  name               = "glue_role"
+  assume_role_policy = data.aws_iam_policy_document.glue-assume-role-policy.json
+}
+
+resource "aws_glue_crawler" "glue_crawler" {
+  database_name = aws_glue_catalog_database.aws_glue_catalog_database.name
+  name          = "crawlerETLawsTorres"
+  role          = aws_iam_role.glue_role.arn
+
+  s3_target {
+    path = "s3://curated-zone-torres-etl-aws/curated/"
+  }
+
+  depends_on = [
+    aws_glue_catalog_database.aws_glue_catalog_database,
+    aws_iam_role.glue_role
+  ]
+}
+
+data "aws_iam_policy_document" "glue-assume-role-policy" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["glue.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_policy" "extra-policy" {
+  name   = "extra-policy"
+  policy = data.aws_iam_policy_document.extra-policy-document.json
+
+}
+
+data "aws_iam_policy_document" "extra-policy-document" {
+  statement {
+    actions = [
+    "s3:GetBucketLocation", "s3:ListBucket", "s3:ListAllMyBuckets", "s3:GetBucketAcl", "s3:GetObject"]
+    resources = [
+      "arn:aws:s3:::curated-zone-torres-etl-aws",
+      "arn:aws:s3:::curated-zone-torres-etl-aws/*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "extra-policy-attachment" {
+  role       = aws_iam_role.glue_role.name
+  policy_arn = aws_iam_policy.extra-policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "glue-service-role-attachment" {
+  role       = aws_iam_role.glue_role.name
+  policy_arn = data.aws_iam_policy.AWSGlueServiceRole.arn
+}
+
+data "aws_iam_policy" "AWSGlueServiceRole" {
+  arn = "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole"
+}
+
+```
+---
+
