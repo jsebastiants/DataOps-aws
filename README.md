@@ -371,7 +371,7 @@ data "aws_iam_policy" "AWSGlueServiceRole" {
 ```
 ---
 
-Here we’re basically creating a role and assuming a policy with permissions for all resources, in addition to our lambda function, with its characteristics. Bear in mind that actions allows us to perform a certain action. This can be read, list and so on. At this point we already have worked with those two ways `jsonencode` and heredoc `syntax`.
+Here we’re basically creating a role and assuming a policy with permissions for all resources, in addition to our lambda function, with its characteristics. Bear in mind that actions allows us to perform a certain action. This can be read, list and so on. At this point we have already worked with those two forms `jsonencode` and heredoc `syntax`.
 
 ```terraform
 resource "aws_iam_role" "iam_for_lambda" {
