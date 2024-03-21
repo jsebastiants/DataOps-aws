@@ -371,3 +371,4 @@ data "aws_iam_policy" "AWSGlueServiceRole" {
 ```
 ---
 
+Here we’re basically creating a role and assuming a pilicy with permissions for all resources, in addition to our lambda function, with its characteristics.
