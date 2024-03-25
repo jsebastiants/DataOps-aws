@@ -64,7 +64,7 @@ The purpose of this project is develop an ETL application on AWS using DataOps k
 
 ---
 
-### Terraform Scripts
+## Terraform Scripts
 Backend.tf is created to store the state of our infrastructure in our bucket.
 
 ```terraform
@@ -77,6 +77,7 @@ terraform {
 }
 ```
 ---
+### cluster-redshift.tf
 Since we are going to be ingesting data in redshift, there is a bunch of different things we need to create. Here we are basically creating a VPC, a getaway, a security group and so forth. Before we get too far, it is important to mention that there is different ways to define IAM policies, ther first one is using heredoc syntax `(<<EOF ... EOF)` and the second one is with `jsonencode`. The problem with both approaches: If your policy is malformed, you have to terraform apply before you realize the mistake. Besides that, your IDE’s auto-complete can not help you much when using those approaches. Having said that, you can overlook the `(<<EOF ... EOF)` and prefer the data source `aws_iam_policy_document` instead. This way, Terraform can validate your IAM policy (at least from a structural perspective), and your IDE can do a much better job of increasing your productivity.
 
 ```terraform
@@ -226,6 +227,8 @@ resource "aws_redshift_cluster" "default" {
 }
 
 ```
+---
+### eks.tf
 
 In order to create a EKS (Elastic Kubernetes Service) in a simple manner, we are going to use a module. The main specs going to be two 16gb ram machines, one focused on memory and the other on processing.
 
@@ -272,6 +275,7 @@ data "aws_eks_cluster_auth" "cluster" {
 }
 ```
 ---
+### emr-codes-bucket.tf
 
 Basically here is creating a bucket that will store all our code and other dependency files of our spark job as pyfiles, and after this creation, it will upload these files.
 
@@ -298,6 +302,7 @@ resource "aws_s3_bucket_object" "codes_object" {
 }
 ```
 ---
+### glue-crawler.tf
 
 Here we basically have the creation of a database and a crawler in glue to use in our pipeline, in addition to some policies and roles so we don't have problems with permission levels.
 
@@ -370,6 +375,7 @@ data "aws_iam_policy" "AWSGlueServiceRole" {
 
 ```
 ---
+### lambda.tf
 
 Here we’re basically creating a role and assuming a policy with permissions for all resources, in addition to our lambda function, with its characteristics. Bear in mind that actions allows us to perform a certain action. This can be read, list and so on. At this point we have already worked with those two forms `jsonencode` and heredoc `syntax`.
 
@@ -432,3 +438,43 @@ resource "aws_lambda_function" "lambda_function" {
 
 }
 ```
+---
+### lambda_function.py
+
+The lambda function make request for a web link. Then uploads it to a bucket and unzips the files in the bucket itself.
+
+```python
+import requests, io, tempfile, os, boto3
+from zipfile import ZipFile
+
+file_name = 'AdventureWorks.zip'
+bucket = "landing-zone-torres-etl-aws"
+folder_temp_name = 'temp'
+url = 'https://github.com/camposvinicius/data/raw/main/AdventureWorks.zip'
+
+def lambda_handler(event, context):
+    
+    with tempfile.TemporaryDirectory() as temp_path:
+        temp_dir = os.path.join(temp_path, folder_temp_name)
+        with open(temp_dir, 'wb') as f:
+            req = requests.get(url)
+            f.write(req.content)
+        s3 = boto3.resource('s3')
+        s3.Bucket(bucket).upload_file(temp_dir, file_name)
+    
+        zip_obj = s3.Object(bucket_name=bucket, key=file_name)
+        buffer = io.BytesIO(zip_obj.get()["Body"].read())
+        
+        z = ZipFile(buffer)
+        for filename in z.namelist():
+            file_info = z.getinfo(filename)
+            s3.meta.client.upload_fileobj(
+                z.open(filename),
+                Bucket=bucket,
+                Key='data/' + f'{filename}')
+    for file in s3.Bucket(bucket).objects.all():
+        print(file.key)
+```
+---
+### requirement.txt
+
