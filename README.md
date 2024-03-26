@@ -478,3 +478,116 @@ def lambda_handler(event, context):
 ---
 ### requirement.txt
 
+This is an external library that we have as a dependency of our function to pack it. That is one of the ways to do it, afterwards you can see the other way using a `values.yml` because, as you can notice, in the lambda file above we are not only using request but other libraries like boto3 for example.
+
+```txt
+requests>=2.26.0
+```
+---
+### build_lambda_package.sh
+We have a shell script that, basically, at runtime of our CI/CD, installs the libraries placed in the requirements.txt file in a temporary folder along with our lambda function and then zips them.
+
+```sh
+#!/usr/bin/env bash 
+
+cd k8s/resources
+
+# Declare variable for reuse in directory validations
+PACKAGE="package"
+
+# Create directory and install lambda function dependencies
+if [ -d $PACKAGE ]
+then
+	echo "The directory "$PACKAGE" already exists."
+else
+	echo "============================================="
+	echo "Creating the directory "$PACKAGE"..."
+	mkdir $PACKAGE
+	echo "The directory "$PACKAGE" was created."
+	echo "============================================="
+fi
+
+# Declares the variable that locates the requirements with the project's dependencies.
+FILE_REQUIREMENTS=../scripts/requirements.txt
+
+# Checks if the lambda_requirements file exists
+if [ -f $FILE_REQUIREMENTS ]
+then
+	echo "============================================="
+	echo "Installing dependencies located in "$FILE_REQUIREMENTS""
+	pip install --target ./package -r $FILE_REQUIREMENTS
+	echo "Dependencies installed successfully."
+	echo "============================================="	
+fi
+
+
+cd $PACKAGE
+
+# Declares variable that locates the lambda function for reuse in code.
+LAMBDA_FUNCTION=../../lambda-function/lambda_function.py
+
+# Checks if the lambda_function.py file exists.
+if [ -f $LAMBDA_FUNCTION ]
+then
+	echo "============================================="
+	echo "Copying Handler function..."
+	cp $LAMBDA_FUNCTION .
+	echo "Compressing file lambda_function.zip"
+	zip -r9 ../lambda_function.zip . # Compress the package for deployment
+	echo "File zipped successfully!"
+	echo "============================================="
+fi
+
+cd ..
+
+```
+---
+### provider.tf
+
+When we work with eks for example, if we want to have different users and manage them in our cluster, we should keep in mind that once the cluster is created, the user who creates it is the administrator and is he only one with access. If we want to include other users we must do this:
+```terraform
+data "aws_eks_cluster" "cluster" {
+  name = module.eks.cluster_id
+}
+
+data "aws_eks_cluster_auth" "cluster" {
+  name = module.eks.cluster_id
+}
+```
+And then we have to indicate the provider.
+```terraform
+provider "kubernetes" {
+  host                   = data.aws_eks_cluster.cluster.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
+  token                  = data.aws_eks_cluster_auth.cluster.token
+}
+```
+Basically, here are the providers needed to work when creating the cluster.
+
+```terraform
+provider "aws" {
+  region = var.region
+}
+
+provider "kubernetes" {
+  host                   = data.aws_eks_cluster.cluster.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
+  token                  = data.aws_eks_cluster_auth.cluster.token
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = data.aws_eks_cluster.cluster.endpoint
+    cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
+    token                  = data.aws_eks_cluster_auth.cluster.token
+  }
+}
+
+provider "kubectl" {
+  host                   = data.aws_eks_cluster.cluster.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
+  token                  = data.aws_eks_cluster_auth.cluster.token
+  load_config_file       = false
+}
+```
+---
