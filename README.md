@@ -591,3 +591,391 @@ provider "kubectl" {
 }
 ```
 ---
+### rds.tf
+
+For this part we will also create a security group with general entry permission for any type of protocol just for case study, we will use a default VPC and create the instance. Having said that, if you want to use this resource you must keep in mind that there are important argument when you are in the deployment stage. To mention a bunch of arguments, we have Blue/Green deployments for database updates, deletion_protection, skip_final_snapshot(we are considering this argument just for case study), etc.
+``` terraform
+resource "aws_db_instance" "torrespostgresql-instance" {
+  identifier             = "torrespostgresql-instance"
+  db_name                = "torrespostgresql"
+  instance_class         = "db.t2.micro"
+  allocated_storage      = 5
+  engine                 = "postgres"
+  engine_version         = "12.7"
+  skip_final_snapshot    = true
+  publicly_accessible    = true
+  vpc_security_group_ids = [aws_security_group.torrespostgresql.id]
+  username               = var.postgres_user
+  password               = var.postgres_user
+
+  tags = {
+    tag-key = "torres-cluster-postgres-etl-aws"
+  }
+}
+
+data "aws_vpc" "default" {
+  default = true
+}
+
+resource "aws_security_group" "torrespostgresql" {
+  vpc_id = data.aws_vpc.default.id
+  name   = "torrespostgresql"
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    tag-key = "sg-postgres"
+  }
+}
+```
+---
+### security_groups.tf
+Here we are basically creating security groups for our workers from our EKS cluster with internal access via TCP protocol on port 22 and using our VPC ID that we will see shortly.
+
+```terraform
+resource "aws_security_group" "worker_group_mgmt_one" {
+  name_prefix = "worker_group_mgmt_one"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port = 22
+    to_port   = 22
+    protocol  = "tcp"
+
+    cidr_blocks = [
+      "10.0.0.0/8",
+    ]
+  }
+}
+
+resource "aws_security_group" "worker_group_mgmt_two" {
+  name_prefix = "worker_group_mgmt_two"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port = 22
+    to_port   = 22
+    protocol  = "tcp"
+
+    cidr_blocks = [
+      "192.168.0.0/16",
+    ]
+  }
+}
+
+resource "aws_security_group" "all_worker_mgmt" {
+  name_prefix = "all_worker_management"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port = 22
+    to_port   = 22
+    protocol  = "tcp"
+
+    cidr_blocks = [
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+      "192.168.0.0/16",
+    ]
+  }
+}
+```
+---
+### notification_service.tf
+
+Then we are going to create a topic on the SNS and a subscription via email for use.
+``` terraform
+resource "aws_sns_topic" "mysns" {
+  name = "send-email"
+}
+
+resource "aws_sns_topic_subscription" "send-email" {
+  topic_arn = aws_sns_topic.mysns.arn
+  protocol  = "email"
+  endpoint  = var.email
+
+  depends_on = [
+    aws_sns_topic.mysns
+  ]
+}
+
+data "aws_iam_policy_document" "sns_topic_policy" {
+  policy_id = "__default_policy_ID"
+
+  statement {
+    actions = [
+      "SNS:Publish"
+    ]
+
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
+    resources = [
+      aws_sns_topic.mysns.arn,
+    ]
+
+    sid = "__default_statement_ID"
+  }
+}
+```
+---
+### variables.tf
+Here are the variables being used in our code.
+
+``` terraform
+variable "region" {
+  default = "us-east-1"
+}
+
+variable "cluster_name" {
+  default = "torres-cluster-eks"
+}
+
+variable "redshift_user" {
+  default = "your-redshift-user"
+}
+
+variable "redshift_pass" {
+  default = "your-redshift-password"
+}
+
+variable "redshift_db" {
+  default = "elttorres"
+}
+
+variable "postgres_user" {
+  default = "your-postgres-user"
+}
+
+variable "postgres_pass" {
+  default = "your-postgres-password"
+}
+
+variable "email" {
+  default = "your-email"
+}
+```
+---
+### versions.tf
+The necessary versions of the modules that we will use for our code.
+
+```terraform
+terraform {
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "3.73.0"
+    }
+
+    random = {
+      source  = "hashicorp/random"
+      version = "3.1.0"
+    }
+
+    local = {
+      source  = "hashicorp/local"
+      version = "2.1.0"
+    }
+
+    null = {
+      source  = "hashicorp/null"
+      version = "3.1.0"
+    }
+
+    kubectl = {
+      source  = "gavinbunney/kubectl"
+      version = ">= 1.7.0"
+    }
+
+  }
+
+  required_version = ">= 0.14"
+}
+```
+---
+### vpc.tf
+Here we are creating a VPC module that we will use for the operation of our EKS cluster. When we work with eks what we are looking for is that our cluster is located in a private subnet. This will allow your nodes not to be exposed to the internet, it is a very good practice. In production is more suitable have the `single_nat_gateway = False` this is because we expect have one nat_gateway per subnet.
+
+```terraform
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "3.2.0"
+
+  name                 = "eks-vpc"
+  cidr                 = "10.0.0.0/16"
+  azs                  = ["${var.region}a", "${var.region}b"]
+  private_subnets      = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+  public_subnets       = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"]
+  enable_nat_gateway   = true
+  single_nat_gateway   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+  }
+
+  public_subnet_tags = {
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/role/elb"                    = "1"
+  }
+
+  private_subnet_tags = {
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/role/internal-elb"           = "1"
+  }
+}
+```
+---
+### output.tf
+
+Here we are just seeing in the log after creation some resources like the cluster ID, its name, endpoint and AWS region.
+``` terraform 
+output "cluster_id" {
+  description = "EKS cluster ID."
+  value       = module.eks.cluster_id
+}
+
+output "cluster_endpoint" {
+  description = "Endpoint for EKS control plane."
+  value       = module.eks.cluster_endpoint
+}
+
+output "cluster_security_group_id" {
+  description = "Security group ids attached to the cluster control plane."
+  value       = module.eks.cluster_security_group_id
+}
+
+output "region" {
+  description = "AWS region"
+  value       = var.region
+}
+
+output "cluster_name" {
+  description = "Kubernetes Cluster Name"
+  value       = var.cluster_name
+}
+```
+---
+### apps.tf
+In order to be clear, first the `argocd` and `airflow` namespaces are created. Afterwards, the installation file is applied to the `argocd` namespace.
+- After argocd is deployed, it will authenticate to the private repository, which I will explain how you will make it work.
+- Afterwards, a secret will be created in the airflow namespace that will give access to the private repository, which I will also explain how you will make it work.
+- Afterwards, the airflow will be deployed in the airflow namespace, automatically.
+- And finally, you will pass your credentials that you will use in the values.yaml of your chart, which I will also show.
+
+This is the first step:
+
+``` yml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: airflow
+```
+Behind the scenes, this provider uses the same capability as the kubectl apply command, that is, you can update the YAML inline and the resource will be updated in place in kubernetes. 
+TIP: This resource only supports a single yaml resource. If you have a list of documents in your yaml file, use the `kubectl_path_documents` or `kubectl_file_documents` data source to split the files into individual resources.
+``` terraform
+data "kubectl_file_documents" "namespace" {
+  content = file("../charts/argocd/namespace.yaml")
+}
+resource "kubectl_manifest" "namespace" {
+  count              = length(data.kubectl_file_documents.namespace.documents)
+  yaml_body          = element(data.kubectl_file_documents.namespace.documents, count.index)
+  override_namespace = "argocd"
+  depends_on = [
+    data.kubectl_file_documents.namespace,
+    module.eks
+  ]
+}
+
+data "kubectl_file_documents" "argocd" {
+  content = file("../charts/argocd/install.yaml")
+}
+
+resource "kubectl_manifest" "argocd" {
+  count              = length(data.kubectl_file_documents.argocd.documents)
+  yaml_body          = element(data.kubectl_file_documents.argocd.documents, count.index)
+  override_namespace = "argocd"
+  depends_on = [
+    kubectl_manifest.namespace,
+    data.kubectl_file_documents.argocd,
+    module.eks
+  ]
+}
+
+data "kubectl_file_documents" "git" {
+  content = file("../charts/argocd/auth.yaml")
+}
+
+resource "kubectl_manifest" "git" {
+  count              = length(data.kubectl_file_documents.git.documents)
+  yaml_body          = element(data.kubectl_file_documents.git.documents, count.index)
+  override_namespace = "argocd"
+  depends_on = [
+    kubectl_manifest.argocd,
+    data.kubectl_file_documents.git
+  ]
+}
+
+data "kubectl_file_documents" "airflow_key" {
+  content = file("../airflow_access_git_repo/ssh.yaml")
+}
+
+resource "kubectl_manifest" "airflow_manifest" {
+  count              = length(data.kubectl_file_documents.airflow_key.documents)
+  yaml_body          = element(data.kubectl_file_documents.airflow_key.documents, count.index)
+  override_namespace = "airflow"
+  depends_on = [
+    kubectl_manifest.argocd,
+    data.kubectl_file_documents.airflow_key
+  ]
+}
+
+data "kubectl_file_documents" "airflow" {
+  content = file("../apps/airflow-app.yaml")
+}
+
+resource "kubectl_manifest" "airflow" {
+  count              = length(data.kubectl_file_documents.airflow.documents)
+  yaml_body          = element(data.kubectl_file_documents.airflow.documents, count.index)
+  override_namespace = "argocd"
+  depends_on = [
+    kubectl_manifest.argocd,
+    data.kubectl_file_documents.airflow,
+    module.eks
+  ]
+}
+
+data "kubectl_file_documents" "keys" {
+  content = file("../secrets/keys.yml")
+}
+
+resource "kubectl_manifest" "keys" {
+  count              = length(data.kubectl_file_documents.keys.documents)
+  yaml_body          = element(data.kubectl_file_documents.keys.documents, count.index)
+  override_namespace = "airflow"
+  depends_on = [
+    data.kubectl_file_documents.keys,
+    data.kubectl_file_documents.airflow,
+    kubectl_manifest.argocd,
+    kubectl_manifest.airflow
+  ]
+}
+```
+---
