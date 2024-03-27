@@ -50,7 +50,7 @@ LANDING_ZONE = getenv('LANDING_ZONE', f'landing-zone-{AWS_PROJECT}')
 CURATED_ZONE = getenv('CURATED_ZONE', f'curated-zone-{AWS_PROJECT}')
 CURATED_KEY = getenv('CURATED_KEY', 'curated/')
 
-REDSHIFT_USER = getenv("REDSHIFT_USER", "vini")
+REDSHIFT_USER = getenv("REDSHIFT_USER", "torres")
 REDSHIFT_SCHEMA = getenv("REDSHIFT_SCHEMA", "vini_etl_aws_redshift_schema")
 REDSHIFT_TABLE = getenv("REDSHIFT_TABLE", "vini_etl_aws_redshift_table")
 
@@ -59,9 +59,9 @@ ATHENA_DATABASE = getenv("ATHENA_DATABASE", "vini-database-etl-aws")
 ATHENA_OUTPUT = getenv("ATHENA_OUTPUT", "s3://athena-results-vini-etl-aws/")
 
 POSTGRES_PASSWORD = Variable.get("POSTGRES_PASSWORD")
-POSTGRES_USERNAME = 'vinietlaws'
+POSTGRES_USERNAME = 'torresetlaws'
 POSTGRES_PORT = '5432'
-POSTGRES_DATABASE = 'vinipostgresql'
+POSTGRES_DATABASE = 'torrespostgresql'
 POSTGRESQL_TABLE = 'vini_etl_aws_postgresql_table'
 POSTGRES_ENDPOINT = f'{POSTGRES_DATABASE}-instance.cngltutuixt3.us-east-1.rds.amazonaws.com'
 
