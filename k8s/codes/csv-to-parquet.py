@@ -31,7 +31,7 @@ class CSVtoPARQUET:
     def create_logger(self):
         logging.basicConfig(format='%(name)s - %(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %I:%M:%S %p', stream=sys.stdout)
-        logger = logging.getLogger('ETL_AWS_VINICIUS_CAMPOS')
+        logger = logging.getLogger('ETL_AWS_SEBASTIAN_TORRES')
         logger.setLevel(logging.DEBUG)
 
     def csv_to_parquet(self):
@@ -50,7 +50,7 @@ class CSVtoPARQUET:
 if __name__ == "__main__":
 
     spark = (
-        SparkSession.builder.appName('ETL_AWS_VINICIUS_CAMPOS')
+        SparkSession.builder.appName('ETL_AWS_SEBASTIAN_TORRES')
         .enableHiveSupport()
         .config('spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version', '2')
         .config('spark.speculation', 'false')

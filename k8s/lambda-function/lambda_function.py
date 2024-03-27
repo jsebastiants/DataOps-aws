@@ -1,10 +1,10 @@
 import requests, io, tempfile, os, boto3
 from zipfile import ZipFile
 
-file_name = 'AwsData.zip'
-bucket = "landing-zone-torres-etl-aws"
+file_name = 'AdventureWorks.zip'
+bucket = "landing-zone-torres-poc-etl-aws"
 folder_temp_name = "temp"
-url = 'https://github.com/camposvinicius/data/raw/main/AdventureWorks.zip'
+url = 'https://github.com/jsebastiants/DataOps-aws/files/14781813/AdventureWorks.1.zip'
 
 def lambda_handler(event, context):
     with tempfile.TemporaryDirectory() as temp_path:
