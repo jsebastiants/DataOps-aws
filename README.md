@@ -1662,7 +1662,7 @@ from datetime import timedelta
 from sqlalchemy import create_engine
 from github import Github
 
-from airflow import Dag
+from airflow import DAG
 from airflow.models import Variable 
 from airflow.utils.dates import days_ago
 
@@ -1671,7 +1671,7 @@ from airflow.utils.dates import days_ago
 from airflow.operators.python import PythonOperator
 from airflow.sensors.python import PythonSensor
 from airflow.operators.dummy import DummyOperator
-from airflow.operators.bash import BashOpeartor
+from airflow.operators.bash import BashOperator 
 
 from airflow.providers.amazon.aws.operators.s3_bucket import (
     S3CreateBucketOperator, 
@@ -1705,33 +1705,33 @@ CURATED_ZONE = getenv('CURATED_ZONE', f'curated-zone-{AWS_PROJECT}')
 CURATED_KEY = getenv('CURATED_KEY', 'curated/')
 
 REDSHIFT_USER = getenv("REDSHIFT_USER", "torres")
-REDSHIFT_SCHEMA = getenv("REDSHIFT_SCHEMA", "vini_etl_aws_redshift_schema")
-REDSHIFT_TABLE = getenv("REDSHIFT_TABLE", "vini_etl_aws_redshift_table")
+REDSHIFT_SCHEMA = getenv("REDSHIFT_SCHEMA", "torres_etl_aws_redshift_schema")
+REDSHIFT_TABLE = getenv("REDSHIFT_TABLE", "torres_etl_aws_redshift_table")
 
 ATHENA_TABLE = getenv("ATHENA_TABLE", "curated")
-ATHENA_DATABASE = getenv("ATHENA_DATABASE", "vini-database-etl-aws")
-ATHENA_OUTPUT = getenv("ATHENA_OUTPUT", "s3://athena-results-vini-etl-aws/")
+ATHENA_DATABASE = getenv("ATHENA_DATABASE", "torres-database-etl-aws")
+ATHENA_OUTPUT = getenv("ATHENA_OUTPUT", "s3://athena-results-torres-etl-aws/")
 
 POSTGRES_PASSWORD = Variable.get("POSTGRES_PASSWORD")
 POSTGRES_USERNAME = 'torresetlaws'
 POSTGRES_PORT = '5432'
 POSTGRES_DATABASE = 'torrespostgresql'
-POSTGRESQL_TABLE = 'vini_etl_aws_postgresql_table'
+POSTGRESQL_TABLE = 'torres_etl_aws_postgresql_table'
 POSTGRES_ENDPOINT = f'{POSTGRES_DATABASE}-instance.cngltutuixt3.us-east-1.rds.amazonaws.com'
 
 POSTGRESQL_CONNECTION = f'postgresql://{POSTGRES_USERNAME}:{POSTGRES_PASSWORD}@{POSTGRES_ENDPOINT}:{POSTGRES_PORT}/{POSTGRES_DATABASE}'
 
 GITHUB_TOKEN = Variable.get("GITHUB_TOKEN")
-GITHUB_USER = getenv("GITHUB_USER", "camposvinicius")
-GITHUB_REPO = getenv("GITHUB_REPO", "aws-etl")
+GITHUB_USER = getenv("GITHUB_USER", "jsebastiants")
+GITHUB_REPO = getenv("GITHUB_REPO", "DataOps-aws")
 GITHUB_WORKFLOW_FILE_NAME = getenv("GITHUB_WORKFLOW_FILE_NAME", "destroy.yml")
 
-EMR_CODE_PATH = 's3://emr-code-zone-vini-etl-aws'
+EMR_CODE_PATH = 's3://emr-code-zone-torres-etl-aws'
 
 # EMR Cluster Config
 
 EMR_CONFIG = {
-    'Name': 'ETL-VINI-AWS',
+    'Name': 'ETL-TORRES-AWS',
     "ReleaseLabel": "emr-6.5.0",
     "Applications": [{"Name": "Hadoop"}, {"Name": "Spark"}], 
     'Instances': {
@@ -2056,14 +2056,14 @@ def get_last_status_last_workflow(**kwargs):
   # Tasks
 
 default_args = {
-    'owner': 'Vini Campos',
+    'owner': 'Sebastian Torres',
     'depends_on_past': False,
     'on_failure_callback': on_failure_callback,
     'retries': 1
 }
 
 with DAG(
-    dag_id="vini-campos-etl-aws",
+    dag_id="sebastian-torres-etl-aws",
     tags=['etl', 'aws', 'dataengineer'],
     default_args=default_args,
     start_date=days_ago(1),
@@ -2212,7 +2212,7 @@ with DAG(
 
     glue_crawler = AwsGlueCrawlerOperator(
         task_id='glue_crawler_curated',
-        config={"Name": "CrawlerETLAWSVini"},
+        config={"Name": "crawlerETLawsTorres"},
         aws_conn_id='aws',
         poll_interval=10
     )
