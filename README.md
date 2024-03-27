@@ -448,12 +448,11 @@ import requests, io, tempfile, os, boto3
 from zipfile import ZipFile
 
 file_name = 'AdventureWorks.zip'
-bucket = "landing-zone-torres-etl-aws"
-folder_temp_name = 'temp'
-url = 'https://github.com/camposvinicius/data/raw/main/AdventureWorks.zip'
+bucket = "landing-zone-torres-poc-etl-aws"
+folder_temp_name = "temp"
+url = 'https://github.com/jsebastiants/DataOps-aws/files/14781813/AdventureWorks.1.zip'
 
 def lambda_handler(event, context):
-    
     with tempfile.TemporaryDirectory() as temp_path:
         temp_dir = os.path.join(temp_path, folder_temp_name)
         with open(temp_dir, 'wb') as f:
@@ -461,17 +460,18 @@ def lambda_handler(event, context):
             f.write(req.content)
         s3 = boto3.resource('s3')
         s3.Bucket(bucket).upload_file(temp_dir, file_name)
-    
+
         zip_obj = s3.Object(bucket_name=bucket, key=file_name)
         buffer = io.BytesIO(zip_obj.get()["Body"].read())
-        
+
         z = ZipFile(buffer)
         for filename in z.namelist():
             file_info = z.getinfo(filename)
             s3.meta.client.upload_fileobj(
                 z.open(filename),
-                Bucket=bucket,
-                Key='data/' + f'{filename}')
+                Bucket = bucket,
+                Key = 'data/' + f'{filename}'
+            )
     for file in s3.Bucket(bucket).objects.all():
         print(file.key)
 ```
@@ -1171,7 +1171,7 @@ class CSVtoPARQUET:
     def create_logger(self):
         logging.basicConfig(format='%(name)s - %(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %I:%M:%S %p', stream=sys.stdout)
-        logger = logging.getLogger('ETL_AWS_VINICIUS_CAMPOS')
+        logger = logging.getLogger('ETL_AWS_SEBASTIAN_TORRES')
         logger.setLevel(logging.DEBUG)
 
     def csv_to_parquet(self):
@@ -1190,7 +1190,7 @@ class CSVtoPARQUET:
 if __name__ == "__main__":
 
     spark = (
-        SparkSession.builder.appName('ETL_AWS_VINICIUS_CAMPOS')
+        SparkSession.builder.appName('ETL_AWS_SEBASTIAN_TORRES')
         .enableHiveSupport()
         .config('spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version', '2')
         .config('spark.speculation', 'false')
@@ -1255,7 +1255,7 @@ class ServeData:
     def create_logger(self):
         logging.basicConfig(format='%(name)s - %(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %I:%M:%S %p', stream=sys.stdout)
-        logger = logging.getLogger('ETL_AWS_VINICIUS_CAMPOS')
+        logger = logging.getLogger('ETL_AWS_SEBASTIAN_TORRES')
         logger.setLevel(logging.DEBUG)
 
     def to_curated(self):
@@ -1290,7 +1290,7 @@ class ServeData:
 if __name__ == "__main__":
 
     spark = (
-        SparkSession.builder.appName('ETL_AWS_VINICIUS_CAMPOS')
+        SparkSession.builder.appName('ETL_AWS_SEBASTIAN_TORRES')
         .enableHiveSupport()
         .config('spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version', '2')
         .config('spark.speculation', 'false')
@@ -1322,9 +1322,9 @@ if __name__ == "__main__":
 ### variables.py
 
 ``` python 
-PATH_SOURCE = 's3://landing-zone-vini-poc-etl-aws/data/AdventureWorks/{file}.csv'
-PATH_TARGET = 's3://processing-zone-vini-poc-etl-aws/processing/AdventureWorks_AdventureWorks_{file}'
-PATH_CURATED = 's3://curated-zone-vini-poc-etl-aws/curated/'
+PATH_SOURCE = 's3://landing-zone-torres-poc-etl-aws/data/AdventureWorks/{file}.csv'
+PATH_TARGET = 's3://processing-zone-torres-poc-etl-aws/processing/AdventureWorks_AdventureWorks_{file}'
+PATH_CURATED = 's3://curated-zone-torres-poc-etl-aws/curated/'
 
 VIEWS = [
   'Customers',
