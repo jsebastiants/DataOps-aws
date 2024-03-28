@@ -1451,8 +1451,8 @@ If you want more information about connections config check this link [Manage Ai
     type: redshift
     description: REDSHIFT CONN
     host: redshift-cluster-etl-torres.cpmardrhdluz.us-east-1.redshift.amazonaws.com
-    schema: etlvini
-    login: vini
+    schema: etltorres
+    login: torres
     password: "${REDSHIFT_PASSWORD}"
     port: 5439
 
