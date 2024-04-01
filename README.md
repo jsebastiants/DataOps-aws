@@ -375,6 +375,18 @@ data "aws_iam_policy" "AWSGlueServiceRole" {
 
 ```
 ---
+
+### key-pair.tf
+
+This is optional, only if you need to connect to a cluster for debugging at some point in the pipeline.
+```terraform
+resource "aws_key_pair" "my-key" {
+  key_name   = "my-key"
+  public_key = "YOUR-PUBLIC-KEY"
+}
+```
+
+---
 ### lambda.tf
 
 Here we’re basically creating a role and assuming a policy with permissions for all resources, in addition to our lambda function, with its characteristics. Bear in mind that actions allows us to perform a certain action. This can be read, list and so on. At this point we have already worked with those two forms `jsonencode` and heredoc `syntax`.
